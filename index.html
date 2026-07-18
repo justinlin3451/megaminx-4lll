@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="purple">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -68,6 +68,10 @@ nav.modes button.active{background:var(--accent);color:var(--accent-ink);}
 .smi-label{display:flex;flex-direction:column;gap:1px;}
 .smi-title{font-size:13.5px;font-weight:600;color:var(--text);}
 .smi-sub{font-size:11px;color:var(--muted);}
+.settings-menu-divider{height:1px;background:var(--line);margin:6px 4px;}
+.settings-danger-btn{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:9px;border:none;background:none;cursor:pointer;font-size:13.5px;font-weight:700;color:var(--red);font-family:inherit;text-align:left;}
+.settings-danger-btn:hover{background:color-mix(in srgb, var(--red) 14%, transparent);}
+.settings-danger-btn svg{flex:none;opacity:.9;}
 .toggle-switch{position:relative;display:inline-block;width:36px;height:20px;flex:none;}
 .toggle-switch input{opacity:0;width:0;height:0;position:absolute;}
 .toggle-switch .track{position:absolute;inset:0;background:var(--surface2);border:1.5px solid var(--line);border-radius:999px;transition:background .15s, border-color .15s;}
@@ -215,7 +219,7 @@ footer{margin-top:50px;color:var(--muted);font-size:12px;text-align:center;line-
   <header class="top">
     <div class="brand">
       <svg class="pent" viewBox="0 0 100 100"><polygon points="50,4 96,38 78,92 22,92 4,38" fill="none" stroke="var(--accent)" stroke-width="6"/></svg>
-      <h1>Megaminx Algorithms<small>2-Look OLL / PLL Trainer</small></h1>
+      <h1>Megaminx Trainer<small>2-Look OLL / PLL</small></h1>
     </div>
     <div class="top-right">
       <button class="btn back-top" id="backBtnTop">← Back to case select</button>
@@ -232,6 +236,11 @@ footer{margin-top:50px;color:var(--muted);font-size:12px;text-align:center;line-
             <span class="smi-label"><span class="smi-title">Learn Status</span><span class="smi-sub">Track learning vs. learned per case</span></span>
             <span class="toggle-switch"><input type="checkbox" id="optLearnStatus"><span class="track"></span></span>
           </label>
+          <div class="settings-menu-divider"></div>
+          <button class="settings-danger-btn" id="clearDataBtn" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            Clear All Data
+          </button>
         </div>
       </div>
       <div class="theme-dropdown" id="themeDropdown">
@@ -243,10 +252,10 @@ footer{margin-top:50px;color:var(--muted);font-size:12px;text-align:center;line-
           <button data-theme-btn="light" class="theme-option">
             <span class="swatch sw-light"></span> Light <svg class="check" width="13" height="10" viewBox="0 0 13 10"><path d="M1 5l4 4 7-8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button data-theme-btn="dark" class="theme-option">
+          <button data-theme-btn="dark" class="theme-option active">
             <span class="swatch sw-dark"></span> Dark <svg class="check" width="13" height="10" viewBox="0 0 13 10"><path d="M1 5l4 4 7-8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button data-theme-btn="purple" class="theme-option active">
+          <button data-theme-btn="purple" class="theme-option">
             <span class="swatch sw-purple"></span> Purple <svg class="check" width="13" height="10" viewBox="0 0 13 10"><path d="M1 5l4 4 7-8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
@@ -475,9 +484,11 @@ function subgroupOf(c){
 
 /* ====================== APP STATE ====================== */
 let mode = 'oll';
-let caseState = { oll: {}, pll: {} }; // caseId -> 'learning' | 'learned' (absent = not selected)
-OLL.forEach(c=>{ caseState.oll[c.id] = 'learning'; });
-PLL.forEach(c=>{ caseState.pll[c.id] = 'learning'; });
+// Simple mode (Learn Status off) and Learn Status mode keep independent selections,
+// so switching the toggle never turns a plain selection into "Learning" or vice versa.
+let caseStateSimple = { oll: {}, pll: {} }; // caseId -> 'learning' (just a truthy "selected" marker)
+let caseStateLearn  = { oll: {}, pll: {} }; // caseId -> 'learning' | 'learned'
+let caseState = caseStateSimple; // active pointer — swapped when Learn Status is toggled
 let learnStatusOn = false;               // whether the learning/learned distinction is active at all
 let trainFilter = { learning: true, learned: false }; // which states get included when Learn Status is on
 function cycleCaseState(m, id){
@@ -523,8 +534,10 @@ function saveState(){
   try{
     const state = {
       mode,
-      caseStateOll: caseState.oll,
-      caseStatePll: caseState.pll,
+      caseStateOllSimple: caseStateSimple.oll,
+      caseStatePllSimple: caseStateSimple.pll,
+      caseStateOllLearn: caseStateLearn.oll,
+      caseStatePllLearn: caseStateLearn.pll,
       times,
       optAutoReveal: document.getElementById('optAutoReveal').checked,
       optGroupMoves: document.getElementById('optGroupMoves').checked,
@@ -550,28 +563,34 @@ function loadState(){
     if(state.mode === 'oll' || state.mode === 'pll') mode = state.mode;
     const validOll = new Set(OLL.map(c=>c.id));
     const validPll = new Set(PLL.map(c=>c.id));
-    if(state.caseStateOll && typeof state.caseStateOll === 'object'){
+    function cleanCaseMap(obj, validIds){
       const clean = {};
-      for(const [id, st] of Object.entries(state.caseStateOll)){
-        if(validOll.has(id) && (st==='learning'||st==='learned')) clean[id] = st;
+      if(obj && typeof obj === 'object'){
+        for(const [id, st] of Object.entries(obj)){
+          if(validIds.has(id) && (st==='learning'||st==='learned')) clean[id] = st;
+        }
       }
-      caseState.oll = clean;
-    } else if(Array.isArray(state.selectedOll)){
-      // migrating from the old boolean-selected format
-      const clean = {};
-      state.selectedOll.forEach(id=>{ if(validOll.has(id)) clean[id] = 'learning'; });
-      caseState.oll = clean;
+      return clean;
     }
-    if(state.caseStatePll && typeof state.caseStatePll === 'object'){
-      const clean = {};
-      for(const [id, st] of Object.entries(state.caseStatePll)){
-        if(validPll.has(id) && (st==='learning'||st==='learned')) clean[id] = st;
-      }
-      caseState.pll = clean;
-    } else if(Array.isArray(state.selectedPll)){
-      const clean = {};
-      state.selectedPll.forEach(id=>{ if(validPll.has(id)) clean[id] = 'learning'; });
-      caseState.pll = clean;
+    if(state.caseStateOllSimple || state.caseStatePllSimple || state.caseStateOllLearn || state.caseStatePllLearn){
+      // current split format
+      caseStateSimple.oll = cleanCaseMap(state.caseStateOllSimple, validOll);
+      caseStateSimple.pll = cleanCaseMap(state.caseStatePllSimple, validPll);
+      caseStateLearn.oll = cleanCaseMap(state.caseStateOllLearn, validOll);
+      caseStateLearn.pll = cleanCaseMap(state.caseStatePllLearn, validPll);
+    } else if(state.caseStateOll || state.caseStatePll){
+      // migrating from the older single-container save: seed both modes from it so
+      // nothing is silently lost, but from here on they diverge independently
+      const oll = cleanCaseMap(state.caseStateOll, validOll);
+      const pll = cleanCaseMap(state.caseStatePll, validPll);
+      caseStateLearn.oll = oll;
+      caseStateLearn.pll = pll;
+      Object.keys(oll).forEach(id=>{ caseStateSimple.oll[id] = 'learning'; });
+      Object.keys(pll).forEach(id=>{ caseStateSimple.pll[id] = 'learning'; });
+    } else if(Array.isArray(state.selectedOll) || Array.isArray(state.selectedPll)){
+      // migrating from the even older boolean-selected format
+      if(Array.isArray(state.selectedOll)) state.selectedOll.forEach(id=>{ if(validOll.has(id)) caseStateSimple.oll[id] = 'learning'; });
+      if(Array.isArray(state.selectedPll)) state.selectedPll.forEach(id=>{ if(validPll.has(id)) caseStateSimple.pll[id] = 'learning'; });
     }
     if(Array.isArray(state.times)) times = state.times;
     if(typeof state.optAutoReveal === 'boolean') document.getElementById('optAutoReveal').checked = state.optAutoReveal;
@@ -581,6 +600,7 @@ function loadState(){
       document.getElementById('optLearnStatus').checked = learnStatusOn;
       document.getElementById('learnFilterRow').classList.toggle('hide', !learnStatusOn);
     }
+    caseState = learnStatusOn ? caseStateLearn : caseStateSimple;
     if(state.trainFilter && typeof state.trainFilter === 'object'){
       trainFilter.learning = state.trainFilter.learning !== false;
       trainFilter.learned = !!state.trainFilter.learned;
@@ -647,6 +667,15 @@ settingsTriggerBtn.addEventListener('click', (e)=>{
 });
 document.addEventListener('click', (e)=>{
   if(!settingsDropdown.contains(e.target)) closeSettingsMenu();
+});
+document.getElementById('clearDataBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  closeSettingsMenu();
+  const ok = confirm('Are you sure? This will permanently delete all your data — case selections, learning/learned status, solve times, and settings — and cannot be undone.');
+  if(ok){
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(err){}
+    location.reload();
+  }
 });
 
 /* ---------- picker grid ---------- */
@@ -1134,6 +1163,7 @@ document.getElementById('optGroupMoves').addEventListener('change', ()=>{
 
 document.getElementById('optLearnStatus').addEventListener('change', (e)=>{
   learnStatusOn = e.target.checked;
+  caseState = learnStatusOn ? caseStateLearn : caseStateSimple;
   document.getElementById('learnFilterRow').classList.toggle('hide', !learnStatusOn);
   saveState();
   renderGrid();
